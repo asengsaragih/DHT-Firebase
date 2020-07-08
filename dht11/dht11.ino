@@ -3,6 +3,11 @@
 #include <DHT.h>
 #include <DHT_U.h>
 
+#include <time.h>
+
+int timezone = 7 * 3600;
+int dst = 0;
+
 #define DHTPIN 2
 #define DHTTYPE DHT11
 
@@ -21,6 +26,8 @@ FirebaseJson json;
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
 uint32_t delayMS;
+
+String currentTime;
 
 void setup() {
   Serial.begin(115200);
@@ -53,13 +60,22 @@ void setup() {
 
   Firebase.setReadTimeout(firebaseData, 1000 * 60);
   Firebase.setwriteSizeLimit(firebaseData, "tiny");
+
+  configTime(timezone, dst, "pool.ntp.org","time.nist.gov");
+  Serial.println("\nWaiting for Internet time");
+
+  while(!time(nullptr)){
+     Serial.print("*");
+     delay(1000);
+  }
+  Serial.println("\nTime response....OK"); 
 }
 
 void loop() {
   // clear json before taking again
   
   // Delay between measurements.
-  delay(10000);
+  delay(30000);
   // Get temperature event and print its value.
   sensors_event_t event;
   dht.temperature().getEvent(&event);
@@ -87,9 +103,24 @@ void loop() {
     Serial.println(F("%"));
   }
 
+  time_t now = time(nullptr);
+  struct tm* p_tm = localtime(&now);
+
+  int days = p_tm->tm_mday;
+  int months = p_tm->tm_mon + 1;
+  int years = p_tm->tm_year + 1900;
+  int hours = p_tm->tm_hour + 2;
+  int minutes = p_tm->tm_min;
+  int seconds = p_tm->tm_sec;
+
+  currentTime = String(days) + "/" + String(months) + "/" + String(years) + " " + String(hours) + ":" + String(minutes) + ":" + String(seconds);
+
+  Serial.println(currentTime);
+  
   if (WiFi.status() == WL_CONNECTED) {
     json.add("humidity", hum);
     json.add("temperature", tem);
+    json.add("date", currentTime);
     Firebase.pushJSON(firebaseData, "Data/", json);
   }
 
